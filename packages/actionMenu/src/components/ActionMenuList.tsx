@@ -1,6 +1,14 @@
-import { HOTKEYS, YooEditor, YooptaBaseElement, YooptaPluginType, useElements, cx, YooptaBaseToolProps } from '@yoopta/editor';
+import {
+  HOTKEYS,
+  YooEditor,
+  YooptaBaseElement,
+  YooptaPluginType,
+  useElements,
+  cx,
+  YooptaBaseToolProps,
+} from '@yoopta/editor';
 import { disableBodyScroll, enableBodyScroll } from 'body-scroll-lock';
-import { CSSProperties, MouseEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, KeyboardEvent, MouseEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Element, Editor, Path, Point, Transforms, Text } from 'slate';
 import { useSlate } from 'slate-react';
 import { getRectByCurrentSelection } from '../utils/selectionRect';
@@ -29,14 +37,14 @@ type Props = YooptaBaseToolProps & {
   options?: ToggleOptions;
   [x: string]: any;
 } & (
-  | {
-      items?: ActionMenuItem<Record<string, unknown>>[];
-      plugins?: YooptaPluginType[];
-      [x: string]: any;
-      options?: ToggleOptions;
-    }
-  | { plugins: YooptaPluginType[]; items?: never; [x: string]: any; options?: ToggleOptions }
-);
+    | {
+        items?: ActionMenuItem<Record<string, unknown>>[];
+        plugins?: YooptaPluginType[];
+        [x: string]: any;
+        options?: ToggleOptions;
+      }
+    | { plugins: YooptaPluginType[]; items?: never; [x: string]: any; options?: ToggleOptions }
+  );
 
 type MenuProps = { fixedStyle: CSSProperties; absoluteStyle: CSSProperties; point: Point | null };
 
@@ -209,6 +217,7 @@ const ActionMenuList = ({ items, render, plugins, trigger = '/', on, ...rest }: 
   };
 
   const handleKeydown = (event) => {
+    console.log('handleKeydown', event);
     if (HOTKEYS.isEscape(event)) {
       event.preventDefault();
       return hideActionMenu();
@@ -239,6 +248,7 @@ const ActionMenuList = ({ items, render, plugins, trigger = '/', on, ...rest }: 
   };
 
   const handleKeyup = (event) => {
+    console.log('handleKeyup', event);
     if (!editor.selection || !trigger) return;
 
     const parentPath = Path.parent(editor.selection.anchor.path);
@@ -249,7 +259,18 @@ const ActionMenuList = ({ items, render, plugins, trigger = '/', on, ...rest }: 
       return showActionMenu();
     }
 
-    if (!isMenuOpen && string === trigger && string.includes(event.key)) {
+    if (string.length === 0) {
+      setTimeout(() => {
+        const string1 = Editor.string(editor, parentPath);
+        // console.log('string1', string1, isMenuOpen, trigger, event.key);
+        if (!isMenuOpen && string1 === trigger && (string1.includes(event.key) || string1.includes(event?.data))) {
+          event.preventDefault();
+          return showActionMenu();
+        }
+      }, 500);
+    }
+
+    if (!isMenuOpen && string === trigger && (string.includes(event.key) || string.includes(event?.data))) {
       event.preventDefault();
       return showActionMenu();
     }
@@ -272,6 +293,13 @@ const ActionMenuList = ({ items, render, plugins, trigger = '/', on, ...rest }: 
 
   const isNotFound = renderMenuItems.length === 0;
 
+  function checkIsAndroid() {
+    const pattern = /Android/i;
+    return pattern.test(navigator.userAgent);
+  }
+
+  const isAndroid = useMemo(() => checkIsAndroid(), []);
+
   useEffect(() => {
     let timeout;
 
@@ -281,15 +309,19 @@ const ActionMenuList = ({ items, render, plugins, trigger = '/', on, ...rest }: 
       }, 1500);
     }
 
+    console.log('isAndroid : ', isAndroid);
+
+    const event = isAndroid ? 'input' : 'keyup';
+
     if (focusableElement > renderMenuItems.length - 1) setFocusableElement(0);
 
     const contentEditor = document.querySelector('#yoopta-contenteditable');
-    contentEditor?.addEventListener('keyup', handleKeyup);
+    contentEditor?.addEventListener(event, handleKeyup);
 
     if (isMenuOpen) document.addEventListener('keydown', handleKeydown, true);
     return () => {
       clearTimeout(timeout);
-      contentEditor?.removeEventListener('keyup', handleKeyup);
+      contentEditor?.removeEventListener(event, handleKeyup);
       if (isMenuOpen) document.removeEventListener('keydown', handleKeydown, true);
     };
   }, [editor, isMenuOpen, focusableElement, renderMenuItems]);
